@@ -9,6 +9,7 @@
 #include "camera_pins.h"
 #include "ws2812.h"
 #include "sd_read_write.h"
+#include "block_handler.h"
 
 #define BUTTON_PIN  0
 #define BUFFER_FRAMES 30 //numero de frames salvos de uma vez
@@ -26,6 +27,8 @@ unsigned long frameTimer[BUFFER_FRAMES];
 unsigned long blockTimer = 0;
 
 int bufferIndex = 0;
+
+bool decoded = false;
 
 void setup() {
   Serial.begin(115200);
@@ -73,6 +76,7 @@ void loop() {
 
   if(running)
   {
+    decoded = false;
     ws2812SetColor(3);
     camera_fb_t * fb = esp_camera_fb_get();
 
@@ -114,32 +118,11 @@ void loop() {
       }
       else
       {
-        String path = "/camera/block" + String(block_index); 
-        SD_MMC.mkdir(path);
-        for (int i = 0; i < BUFFER_FRAMES; i++)
-        {
-          String framePath = path + "/frame" + String(i) + ".jpg"; 
-          File frame = SD_MMC.open(framePath, FILE_WRITE);
+        String path = "/camera/block" + String(block_index) + ".bin";
+        //SD_MMC.mkdir(path);
 
-          if(frame) 
-          {
-            frame.write(frameBuffer[i], frameSize[i]);
-            frame.close();
-            Serial.printf("Salvou %s \n", framePath);
-          }
-
-        }
-
-        blockTimer = frameTimer[29]-frameTimer[0];
-
-        String timePath = path + "/timer.txt";
-        File Timer = SD_MMC.open(timePath, FILE_WRITE);
-
-        Timer.println(String(blockTimer));
-        Timer.println(String(frameTimer[0]));
-        Timer.println(String(frameTimer[29]));
-
-        Timer.close();
+        writeBlock(path, frameBuffer, frameSize, frameTimer);
+        Serial.println(String("Bloco escrito em ") + path);
 
         photo_index = 0;
         block_index++;
@@ -152,9 +135,30 @@ void loop() {
     {
       Serial.println("Camera capture failed.");
     }
-
+  }
+  else
+  {
     ws2812SetColor(2);
+    photo_index = 0; // tecnicamente isso pode peder até 29 frames, mas por enquanto, acceitável.
+    
+    if (!decoded)
+    {
+      String path = "/decode";
+      SD_MMC.mkdir(path);
 
+      int nBlocks = readFileNum(SD_MMC, "/camera");
+
+      for(int i = 0; i < nBlocks; i ++)
+      {
+        path = "/camera/block" + String(i) + ".bin";
+        String destiny = "/decode/block" + String(i);
+        SD_MMC.mkdir(destiny);
+        File file = SD_MMC.open(path, FILE_READ); // provavelmente é mais intuitivo declara o file detro do decode.
+        decodeBlock(file, destiny);
+        file.close();
+      }
+      decoded = true;
+    }
   }
 
 }
@@ -229,3 +233,4 @@ int cameraSetup(void) {
   s->set_ae_level(s, -3);   // Set exposure compensation level
   return 1;
 }
+
