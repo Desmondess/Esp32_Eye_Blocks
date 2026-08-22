@@ -27,6 +27,7 @@ unsigned long frameTimer[BUFFER_FRAMES];
 unsigned long blockTimer = 0;
 
 int bufferIndex = 0;
+//File prev = NULL;
 
 bool decoded = false;
 
@@ -118,11 +119,15 @@ void loop() {
       }
       else
       {
-        String path = "/camera/block" + String(block_index) + ".bin";
+        String path = block_index > 0 ? "/camera/block" + String(block_index) + ".bin": "";
+
+        String prevPath = "/camera/block" + String(block_index-1) + ".bin";
+        //File prevFile = SD_MMC.open(prevPath, FILE_READ);
         //SD_MMC.mkdir(path);
 
-        writeBlock(path, frameBuffer, frameSize, frameTimer);
+        writeBlock(path, frameBuffer, frameSize, frameTimer, prevPath);
         Serial.println(String("Bloco escrito em ") + path);
+
 
         photo_index = 0;
         block_index++;
@@ -148,14 +153,16 @@ void loop() {
 
       int nBlocks = readFileNum(SD_MMC, "/camera");
 
-      for(int i = 0; i < nBlocks; i ++)
+      for(int i = nBlocks; i > 0; i --)
       {
         path = "/camera/block" + String(i) + ".bin";
         String destiny = "/decode/block" + String(i);
+        String prevPath = "/camera/block" + String(i-1) + ".bin";
+        
         SD_MMC.mkdir(destiny);
-        File file = SD_MMC.open(path, FILE_READ); // provavelmente é mais intuitivo declara o file detro do decode.
-        decodeBlock(file, destiny);
-        file.close();
+        //File file = SD_MMC.open(path, FILE_READ); // provavelmente é mais intuitivo declara o file detro do decode.
+        decodeBlock(path, prevPath, destiny);
+        //file.close();
       }
       decoded = true;
     }
